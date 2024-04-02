@@ -1,41 +1,109 @@
 import express from "express";
+import jwt from "jsonwebtoken";
+
+//Models
+import { users } from "../models/users.js";
 import { books } from "../models/books.js";
+
 let booksModel = books;
+let usersModel = users;
 
 const publicRoutes = express.Router();
 
+//checks for users
+const existing = (username) => {
+  let checkUser = Object.keys(usersModel).filter((user) => {
+    return user.username === username;
+  });
+};
+
+//check for authenticated user
+const authenticatedUser = (username, password) => {
+  let valid = Object.keys(usersModel).filter((user) => {
+    return (
+      usersModel[user].username === username &&
+      usersModel[user].password === password
+    );
+  });
+  if (valid.length > 0) {
+    return true;
+  } else {
+    return false;
+  }
+};
+
+// get users
+publicRoutes.get("/users", (req, res) => {
+  return res.status(200).send({ data: usersModel });
+});
+
 // register user
 publicRoutes.post("/register", (req, res) => {
+  const { username, password } = req.body;
+  if (username && password) {
+    if (!existing(username)) {
+      usersModel[Object.keys(usersModel).length + 1] = {
+        username: username,
+        password: password,
+      };
+      return res
+        .status(200)
+        .send({ message: `${username} was successfully created!` });
+    } else {
+      return res.status(404).send({ message: `${username} already exists!` });
+    }
+  }
+});
 
+// login user
+publicRoutes.post("/login", (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(404).json({ message: "Error logging in" });
+  }
+  if (authenticatedUser(username, password)) {
+    let accessToken = jwt.sign(
+      {
+        data: password,
+      },
+      "access",
+      { expiresIn: 60 * 60 }
+    );
+    req.session.authorization = {
+      accessToken,
+      username,
+    };
+    return res.status(200).send("Customer successfully logged in");
+  } else {
+    return res
+      .status(208)
+      .send({ message: "Invalid Login. Check username and password" });
+  }
 });
 
 // get the book list available in the shop
 publicRoutes.get("/", (req, res) => {
-  const Book = booksModel;
-  if (Book) {
-    res.status(200).send({ data: books });
+  try {
+    const Book = booksModel;
+    if (Book) {
+      return res.status(200).send({ allBooks: Book });
+    }
+  } catch (err) {
+    return res.status(404).send({ message: err });
   }
 });
 
 // get the book details based on ISBN
 publicRoutes.get("/isbn/:isbn", (req, res) => {
-  try {
-    const ISBN = req.params.isbn;
-    const Book = booksModel;
-    if (Book) {
-      Object.keys(books).forEach((key) => {
-        if (key == ISBN) {
-          res.status(200).send({
-            message: `Successfully queried data based on ISBN ✅`,
-            data: books[ISBN],
-          });
-        } else {
-          res.status(404).send({ message: `ISBN is not found!!!` });
-        }
-      });
-    }
-  } catch (err) {
-    console.log(err);
+  const isbn = req.params.isbn;
+  const book = Object.keys(books).find((item) => item === isbn);
+  if (book) {
+    res.status(200).send({
+      message: `Successfully queried based on ISBN ✅`,
+      bookByISBN: books[book],
+    });
+  } else {
+    return res.status(404).send({ message: `ISBN is not found!!!` });
   }
 });
 
@@ -51,11 +119,11 @@ publicRoutes.get("/author/:author", (req, res) => {
           allBooksByAuthor[key] = books[key];
         }
       }
-      res.status(200).send({
-        message: `Successfully queried data based on author ✅`,
-        data: allBooksByAuthor,
-      });
     }
+    return res.status(200).send({
+      message: `Successfully queried data based on author ✅`,
+      allBooksByAuthor: allBooksByAuthor,
+    });
   } catch (err) {
     console.log(err);
   }
@@ -73,9 +141,9 @@ publicRoutes.get("/title/:title", (req, res) => {
           allBooksbyTitle[key] = books[key];
         }
       }
-      res.status(200).send({
+      return res.status(200).send({
         message: `Successfully queried data based on title ✅`,
-        data: allBooksbyTitle,
+        allBooksByTitle: allBooksbyTitle,
       });
     }
   } catch (err) {
@@ -83,23 +151,18 @@ publicRoutes.get("/title/:title", (req, res) => {
   }
 });
 
-publicRoutes.get("/review/:isbn", (req, res) => {
+// get a review of a isbn
+publicRoutes.get("/review/:isbn", async (req, res) => {
   try {
-    const ISBN = req.params.isbn;
-    const Book = booksModel;
-    if (Book) {
-      Object.keys(books).forEach((key) => {
-        if (key == ISBN) {
-          res.status(200).send({
-            message: `Successfully queried data based on ISBN ✅`,
-            data: books[ISBN].reviews
-              ? "Book has no reviews"
-              : books[ISBN].reviews,
-          });
-        } else {
-          res.status(404).send({ message: `ISBN is not found!!!` });
-        }
+    const isbn = req.params.isbn;
+    const book = Object.keys(books).find((item) => item === isbn);
+    if (book) {
+      res.status(200).send({
+        message: `Successfully queried based on ISBN ✅`,
+        reviews: books[book].reviews,
       });
+    } else {
+      return res.status(404).send({ message: `ISBN is not found!!!` });
     }
   } catch (err) {
     console.log(err);
