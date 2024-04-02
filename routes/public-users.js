@@ -3,12 +3,21 @@ import jwt from "jsonwebtoken";
 
 //Models
 import { users } from "../models/users.js";
-import { books } from "../models/books.js";
 
-let booksModel = books;
-let usersModel = users;
+//Controller
+import { publicController } from "../controllers/public.controller.js";
 
 const publicRoutes = express.Router();
+
+const {
+  getAllBooks,
+  getBookByISBN,
+  getBooksByAuthor,
+  getBookByTitle,
+  getReviewByISBN,
+} = publicController;
+
+let usersModel = users;
 
 //checks for users
 const existing = (username) => {
@@ -82,91 +91,67 @@ publicRoutes.post("/login", (req, res) => {
 });
 
 // get the book list available in the shop
-publicRoutes.get("/", (req, res) => {
-  try {
-    const Book = booksModel;
-    if (Book) {
-      return res.status(200).send({ allBooks: Book });
-    }
-  } catch (err) {
-    return res.status(404).send({ message: err });
-  }
+publicRoutes.get("/", async (req, res) => {
+  const book = await getAllBooks();
+  return book != null
+    ? res.status(200).send({ allBooks: book })
+    : res.status(404).send({ message: err });
 });
 
 // get the book details based on ISBN
 publicRoutes.get("/isbn/:isbn", (req, res) => {
   const isbn = req.params.isbn;
-  const book = Object.keys(books).find((item) => item === isbn);
-  if (book) {
-    res.status(200).send({
-      message: `Successfully queried based on ISBN ✅`,
-      bookByISBN: books[book],
+  getBookByISBN(isbn)
+    .then((book) => {
+      if (book != null) {
+        res.status(200).send({
+          message: `Successfully queried based on ISBN ✅`,
+          bookByISBN: book,
+        });
+      } else {
+        res.status(404).send({ message: `ISBN is not found!!!` });
+      }
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send({ message: "Internal Server Error" });
     });
-  } else {
-    return res.status(404).send({ message: `ISBN is not found!!!` });
-  }
 });
 
 // get the book details based on author
-publicRoutes.get("/author/:author", (req, res) => {
-  try {
-    const author = req.params.author;
-    const Book = booksModel;
-    const allBooksByAuthor = {};
-    if (Book) {
-      for (let key in books) {
-        if (books[key].author === author) {
-          allBooksByAuthor[key] = books[key];
-        }
-      }
-    }
-    return res.status(200).send({
-      message: `Successfully queried data based on author ✅`,
-      allBooksByAuthor: allBooksByAuthor,
-    });
-  } catch (err) {
-    console.log(err);
-  }
+publicRoutes.get("/author/:author", async (req, res) => {
+  const author = req.params.author;
+  const book = await getBooksByAuthor(author);
+  return book != null
+    ? res.status(200).send({
+        message: `Successfully queried data based on author ✅`,
+        allBooksByAuthor: book,
+      })
+    : res.status(404).send({ message: `Books by author not found!!!` });
 });
 
 // get the books based on title
-publicRoutes.get("/title/:title", (req, res) => {
-  try {
-    const title = req.params.title;
-    const Book = booksModel;
-    const allBooksbyTitle = {};
-    if (Book) {
-      for (let key in books) {
-        if (books[key].title === title) {
-          allBooksbyTitle[key] = books[key];
-        }
-      }
-      return res.status(200).send({
+publicRoutes.get("/title/:title", async (req, res) => {
+  const title = req.params.author;
+  const book = await getBookByTitle(title);
+  return book != null
+    ? res.status(200).send({
         message: `Successfully queried data based on title ✅`,
-        allBooksByTitle: allBooksbyTitle,
-      });
-    }
-  } catch (err) {
-    console.log(err);
-  }
+        allBooksByTitle: book,
+      })
+    : res.status(404).send({ message: `No title found!!!` });
 });
 
 // get a review of a isbn
 publicRoutes.get("/review/:isbn", async (req, res) => {
-  try {
-    const isbn = req.params.isbn;
-    const book = Object.keys(books).find((item) => item === isbn);
-    if (book) {
-      res.status(200).send({
-        message: `Successfully queried based on ISBN ✅`,
-        reviews: books[book].reviews,
-      });
-    } else {
-      return res.status(404).send({ message: `ISBN is not found!!!` });
-    }
-  } catch (err) {
-    console.log(err);
-  }
+  const isbn = req.params.isbn;
+  const book = await getReviewByISBN(isbn);
+  return book != null
+    ? res.status(200).send({
+        message: `Successfully queried reviews based on ISBN ✅`,
+        bookByISBN: book,
+      })
+    : res.status(404).send({ message: `ISBN is not found!!!` });
 });
 
 export { publicRoutes };
